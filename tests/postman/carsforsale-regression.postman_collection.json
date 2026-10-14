@@ -1,0 +1,928 @@
+{
+  "info": {
+    "name": "Cars for Sale - Homepage Regression",
+    "description": "Automated regression suite for https://carsforsell.ddev.site/ covering REG-01 to REG-10 from tests/regression/carsforsale-homepage-regression.csv.\n\nThe site runs locally on DDEV, so run this collection from the Postman desktop app (Collection Runner) or Newman on this machine. The Postman cloud runner cannot reach *.ddev.site.\n\nNot automated (manual checks): visual sticky-header behaviour while scrolling, keyboard focus order, the mobile layout, and submitting the purchase request form (it would create real leads).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "https://carsforsell.ddev.site" }
+  ],
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.test('No Drupal error page', () => {",
+          "  pm.expect(pm.response.text()).to.not.include('The website encountered an unexpected error');",
+          "});",
+          "pm.test('Response time under 5s', () => pm.expect(pm.response.responseTime).to.be.below(5000));"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "REG-01: Homepage loads with default listing of all cars",
+      "item": [
+        {
+          "name": "Homepage shows 10 complete car cards",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const html = pm.response.text();",
+                  "const cards = html.split('<article class=\"car-card').slice(1).map(c => c.split('</article>')[0]).map(c => {",
+                  "  const t = c.match(/car-card__title\"><a href=\"([^\"]+)\">([^<]+)</) || [];",
+                  "  const specs = [...c.matchAll(/<li>([^<]*)<\\/li>/g)].map(m => m[1].trim());",
+                  "  const num = s => Number(String(s || '').replace(/[^0-9.]/g, ''));",
+                  "  return { href: t[1], title: t[2], price: num((c.match(/car-card__price\">([^<]+)</) || [])[1]), location: (c.match(/car-card__location\">([^<]+)</) || [])[1], year: Number(specs[0]), mileage: num(specs[1]), fuel: specs[2], transmission: specs[3], cta: (c.match(/<a href=\"([^\"]+)\" class=\"button car-card__cta\">View (&|&amp;) buy/) || [])[1], photos: c.includes('car-card__photos\">2 photos') };",
+                  "});",
+                  "const count = Number((html.match(/(\\d+) cars? found/) || [])[1]);",
+                  "",
+                  "pm.test('Status is 200 HTML', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html');",
+                  "});",
+                  "pm.test('Page title and H1', () => {",
+                  "  pm.expect(html).to.include('<title>Cars for sale | Cars for Sale</title>');",
+                  "  pm.expect(html).to.match(/<h1[^>]*>\\s*Cars for sale\\s*<\\/h1>/);",
+                  "});",
+                  "pm.test('Shows 10 cars found and 10 cards', () => {",
+                  "  pm.expect(count).to.eql(10);",
+                  "  pm.expect(cards.length).to.eql(10);",
+                  "});",
+                  "pm.test('Default sort is Newest listings', () => {",
+                  "  pm.expect(html).to.include('<option value=\"newest\" selected>');",
+                  "});",
+                  "pm.test('Every card has title, price, location, year, mileage, fuel, transmission, photos label and View & buy', () => {",
+                  "  cards.forEach(c => {",
+                  "    pm.expect(c.title, 'title').to.be.a('string').and.not.empty;",
+                  "    pm.expect(c.price, c.title + ' price').to.be.above(0);",
+                  "    pm.expect(c.location, c.title + ' location').to.be.oneOf(['Downtown Showroom', 'Northside Lot', 'Airport Road Center']);",
+                  "    pm.expect(c.year, c.title + ' year').to.be.within(1990, 2100);",
+                  "    pm.expect(c.mileage, c.title + ' mileage').to.be.at.least(0);",
+                  "    pm.expect(c.fuel, c.title + ' fuel').to.be.oneOf(['Gasoline', 'Diesel', 'Hybrid', 'Plug-in hybrid', 'Electric']);",
+                  "    pm.expect(c.transmission, c.title + ' transmission').to.be.a('string').and.not.empty;",
+                  "    pm.expect(c.photos, c.title + ' photos label').to.be.true;",
+                  "    pm.expect(c.cta, c.title + ' View & buy link').to.eql(c.href);",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/" }
+        },
+        {
+          "name": "Browse cars page (/cars) shows the same 10 cars",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const html = pm.response.text();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('10 cars found', () => pm.expect(html).to.match(/\\b10 cars found/));"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/cars" }
+        }
+      ]
+    },
+    {
+      "name": "REG-02: Keyword search by make/model returns matching cars",
+      "item": [
+        {
+          "name": "Search 'Toyota'",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const html = pm.response.text();",
+                  "const titles = [...html.matchAll(/car-card__title\"><a href=\"[^\"]+\">([^<]+)</g)].map(m => m[1]);",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Only the 2 Toyotas are returned', () => {",
+                  "  pm.expect(html).to.include('2 cars found');",
+                  "  pm.expect(titles).to.have.members(['2021 Toyota RAV4 Hybrid XLE', '2022 Toyota Camry SE']);",
+                  "});",
+                  "pm.test('Search box keeps the keyword', () => pm.expect(html).to.include('name=\"q\" value=\"Toyota\"'));"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/cars?q=Toyota" }
+        },
+        {
+          "name": "Search 'Miata'",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const html = pm.response.text();",
+                  "const titles = [...html.matchAll(/car-card__title\"><a href=\"[^\"]+\">([^<]+)</g)].map(m => m[1]);",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Only the Mazda MX-5 Miata is returned', () => {",
+                  "  pm.expect(html).to.include('1 car found');",
+                  "  pm.expect(titles).to.eql(['2018 Mazda MX-5 Miata Club']);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/cars?q=Miata" }
+        },
+        {
+          "name": "Search with no match shows empty message",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const html = pm.response.text();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('No cards and friendly empty message', () => {",
+                  "  pm.expect(html).to.not.include('<article class=\"car-card');",
+                  "  pm.expect(html).to.include('No cars match your search. Try removing some filters.');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/cars?q=Lamborghini" }
+        }
+      ]
+    },
+    {
+      "name": "REG-03: Filter by Location",
+      "item": [
+        {
+          "name": "Location = Downtown Showroom",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const html = pm.response.text();",
+                  "const titles = [...html.matchAll(/car-card__title\"><a href=\"[^\"]+\">([^<]+)</g)].map(m => m[1]);",
+                  "const locations = [...html.matchAll(/car-card__location\">([^<]+)</g)].map(m => m[1]);",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('4 Downtown Showroom cars', () => {",
+                  "  pm.expect(html).to.include('4 cars found');",
+                  "  pm.expect(titles).to.have.members(['2020 Subaru Outback Premium', '2021 Toyota RAV4 Hybrid XLE', '2020 Ford F-150 XLT SuperCrew', '2022 Toyota Camry SE']);",
+                  "});",
+                  "pm.test('Every card shows Downtown Showroom', () => locations.forEach(l => pm.expect(l).to.eql('Downtown Showroom')));",
+                  "pm.test('Location stays selected', () => pm.expect(html).to.include('<option value=\"1\" selected>'));"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/cars?location=1" }
+        },
+        {
+          "name": "Location = Northside Lot",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const html = pm.response.text();",
+                  "const titles = [...html.matchAll(/car-card__title\"><a href=\"[^\"]+\">([^<]+)</g)].map(m => m[1]);",
+                  "const locations = [...html.matchAll(/car-card__location\">([^<]+)</g)].map(m => m[1]);",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('3 Northside Lot cars', () => {",
+                  "  pm.expect(html).to.include('3 cars found');",
+                  "  pm.expect(titles).to.have.members(['2018 Mazda MX-5 Miata Club', '2019 BMW 330i', '2021 Honda CR-V EX']);",
+                  "});",
+                  "pm.test('Every card shows Northside Lot', () => locations.forEach(l => pm.expect(l).to.eql('Northside Lot')));"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/cars?location=2" }
+        },
+        {
+          "name": "Location = Airport Road Center",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const html = pm.response.text();",
+                  "const titles = [...html.matchAll(/car-card__title\"><a href=\"[^\"]+\">([^<]+)</g)].map(m => m[1]);",
+                  "const locations = [...html.matchAll(/car-card__location\">([^<]+)</g)].map(m => m[1]);",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('3 Airport Road Center cars', () => {",
+                  "  pm.expect(html).to.include('3 cars found');",
+                  "  pm.expect(titles).to.have.members(['2023 Hyundai Ioniq 5 SEL', '2022 Jeep Wrangler Unlimited Sahara', '2023 Tesla Model 3 Long Range']);",
+                  "});",
+                  "pm.test('Every card shows Airport Road Center', () => locations.forEach(l => pm.expect(l).to.eql('Airport Road Center')));"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/cars?location=3" }
+        }
+      ]
+    },
+    {
+      "name": "REG-04: Filter by Make",
+      "item": [
+        {
+          "name": "Make dropdown lists all makes",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const html = pm.response.text();",
+                  "const select = (html.match(/id=\"car-filter-make\"[\\s\\S]*?<\\/select>/) || [''])[0];",
+                  "const options = [...select.matchAll(/<option[^>]*>([^<]+)<\\/option>/g)].map(m => m[1].trim());",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Make options are complete and in order', () => {",
+                  "  pm.expect(options).to.eql(['Any make', 'BMW', 'Ford', 'Honda', 'Hyundai', 'Jeep', 'Mazda', 'Subaru', 'Tesla', 'Toyota']);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/" }
+        },
+        {
+          "name": "Make = Tesla",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const html = pm.response.text();",
+                  "const titles = [...html.matchAll(/car-card__title\"><a href=\"[^\"]+\">([^<]+)</g)].map(m => m[1]);",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Only the Tesla Model 3 is returned', () => {",
+                  "  pm.expect(html).to.include('1 car found');",
+                  "  pm.expect(titles).to.eql(['2023 Tesla Model 3 Long Range']);",
+                  "});",
+                  "pm.test('Tesla stays selected', () => pm.expect(html).to.include('<option value=\"Tesla\" selected>'));"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/cars?make=Tesla" }
+        },
+        {
+          "name": "Make = Toyota",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const html = pm.response.text();",
+                  "const titles = [...html.matchAll(/car-card__title\"><a href=\"[^\"]+\">([^<]+)</g)].map(m => m[1]);",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Only the 2 Toyotas are returned', () => {",
+                  "  pm.expect(html).to.include('2 cars found');",
+                  "  pm.expect(titles).to.have.members(['2021 Toyota RAV4 Hybrid XLE', '2022 Toyota Camry SE']);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/cars?make=Toyota" }
+        }
+      ]
+    },
+    {
+      "name": "REG-05: Filter by Body type and Fuel",
+      "item": [
+        {
+          "name": "Fuel = Electric",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const html = pm.response.text();",
+                  "const titles = [...html.matchAll(/car-card__title\"><a href=\"[^\"]+\">([^<]+)</g)].map(m => m[1]);",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Only electric cars', () => {",
+                  "  pm.expect(html).to.include('2 cars found');",
+                  "  pm.expect(titles).to.have.members(['2023 Hyundai Ioniq 5 SEL', '2023 Tesla Model 3 Long Range']);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/cars?fuel=electric" }
+        },
+        {
+          "name": "Fuel = Hybrid",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const html = pm.response.text();",
+                  "const titles = [...html.matchAll(/car-card__title\"><a href=\"[^\"]+\">([^<]+)</g)].map(m => m[1]);",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Only the RAV4 Hybrid', () => {",
+                  "  pm.expect(html).to.include('1 car found');",
+                  "  pm.expect(titles).to.eql(['2021 Toyota RAV4 Hybrid XLE']);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/cars?fuel=hybrid" }
+        },
+        {
+          "name": "Body type = Truck",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const html = pm.response.text();",
+                  "const titles = [...html.matchAll(/car-card__title\"><a href=\"[^\"]+\">([^<]+)</g)].map(m => m[1]);",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Only the Ford F-150', () => {",
+                  "  pm.expect(html).to.include('1 car found');",
+                  "  pm.expect(titles).to.eql(['2020 Ford F-150 XLT SuperCrew']);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/cars?body=truck" }
+        },
+        {
+          "name": "Body type = SUV",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const html = pm.response.text();",
+                  "const titles = [...html.matchAll(/car-card__title\"><a href=\"[^\"]+\">([^<]+)</g)].map(m => m[1]);",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Only the 4 SUVs', () => {",
+                  "  pm.expect(html).to.include('4 cars found');",
+                  "  pm.expect(titles).to.have.members(['2023 Hyundai Ioniq 5 SEL', '2021 Toyota RAV4 Hybrid XLE', '2022 Jeep Wrangler Unlimited Sahara', '2021 Honda CR-V EX']);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/cars?body=suv" }
+        },
+        {
+          "name": "Fuel = Diesel returns no results",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const html = pm.response.text();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('No cards and friendly empty message', () => {",
+                  "  pm.expect(html).to.not.include('<article class=\"car-card');",
+                  "  pm.expect(html).to.include('No cars match your search. Try removing some filters.');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/cars?fuel=diesel" }
+        }
+      ]
+    },
+    {
+      "name": "REG-06: Filter by Max price and Min year, including invalid input",
+      "item": [
+        {
+          "name": "Max price = 25000",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const html = pm.response.text();",
+                  "const titles = [...html.matchAll(/car-card__title\"><a href=\"[^\"]+\">([^<]+)</g)].map(m => m[1]);",
+                  "const prices = [...html.matchAll(/car-card__price\">([^<]+)</g)].map(m => Number(m[1].replace(/[^0-9.]/g, '')));",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('All prices are at most $25,000', () => prices.forEach(p => pm.expect(p).to.be.at.most(25000)));",
+                  "pm.test('Expected 3 cars', () => {",
+                  "  pm.expect(html).to.include('3 cars found');",
+                  "  pm.expect(titles).to.have.members(['2020 Subaru Outback Premium', '2018 Mazda MX-5 Miata Club', '2022 Toyota Camry SE']);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/cars?max_price=25000" }
+        },
+        {
+          "name": "Min year = 2022",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const html = pm.response.text();",
+                  "const titles = [...html.matchAll(/car-card__title\"><a href=\"[^\"]+\">([^<]+)</g)].map(m => m[1]);",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('All titles are 2022 or newer', () => titles.forEach(t => pm.expect(Number(t.slice(0, 4))).to.be.at.least(2022)));",
+                  "pm.test('Expected 4 cars', () => {",
+                  "  pm.expect(html).to.include('4 cars found');",
+                  "  pm.expect(titles).to.have.members(['2023 Hyundai Ioniq 5 SEL', '2022 Jeep Wrangler Unlimited Sahara', '2023 Tesla Model 3 Long Range', '2022 Toyota Camry SE']);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/cars?min_year=2022" }
+        },
+        {
+          "name": "Max price = 30000 and Min year = 2021",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const html = pm.response.text();",
+                  "const titles = [...html.matchAll(/car-card__title\"><a href=\"[^\"]+\">([^<]+)</g)].map(m => m[1]);",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Honda CR-V and Toyota Camry only', () => {",
+                  "  pm.expect(html).to.include('2 cars found');",
+                  "  pm.expect(titles).to.have.members(['2021 Honda CR-V EX', '2022 Toyota Camry SE']);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/cars?max_price=30000&min_year=2021" }
+        },
+        {
+          "name": "Non-numeric price and year are ignored",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const html = pm.response.text();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Invalid values ignored, all 10 cars shown', () => pm.expect(html).to.match(/\\b10 cars found/));"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/cars?max_price=abc&min_year=abc" }
+        },
+        {
+          "name": "Negative max price does not error",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const html = pm.response.text();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Result count is rendered', () => pm.expect(html).to.match(/\\d+ cars? found/));"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/cars?max_price=-5" }
+        },
+        {
+          "name": "Script in search box is not reflected unescaped",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const html = pm.response.text();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('No raw <script> injection in the page', () => pm.expect(html).to.not.include('<script>alert(1)</script>'));"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/cars?q=%3Cscript%3Ealert(1)%3C%2Fscript%3E" }
+        }
+      ]
+    },
+    {
+      "name": "REG-07: Sort by options order results correctly",
+      "item": [
+        {
+          "name": "Sort = Newest listings",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const html = pm.response.text();",
+                  "const titles = [...html.matchAll(/car-card__title\"><a href=\"[^\"]+\">([^<]+)</g)].map(m => m[1]);",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Newest listings order', () => {",
+                  "  pm.expect(titles).to.eql(['2020 Subaru Outback Premium', '2023 Hyundai Ioniq 5 SEL', '2018 Mazda MX-5 Miata Club', '2021 Toyota RAV4 Hybrid XLE', '2022 Jeep Wrangler Unlimited Sahara', '2019 BMW 330i', '2020 Ford F-150 XLT SuperCrew', '2023 Tesla Model 3 Long Range', '2021 Honda CR-V EX', '2022 Toyota Camry SE']);",
+                  "});",
+                  "pm.test('Newest stays selected', () => pm.expect(html).to.include('<option value=\"newest\" selected>'));"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/cars?sort=newest" }
+        },
+        {
+          "name": "Sort = Price low to high",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const html = pm.response.text();",
+                  "const titles = [...html.matchAll(/car-card__title\"><a href=\"[^\"]+\">([^<]+)</g)].map(m => m[1]);",
+                  "const prices = [...html.matchAll(/car-card__price\">([^<]+)</g)].map(m => Number(m[1].replace(/[^0-9.]/g, '')));",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Prices ascend', () => prices.forEach((p, i) => i && pm.expect(p).to.be.at.least(prices[i - 1])));",
+                  "pm.test('Cheapest first, most expensive last', () => {",
+                  "  pm.expect(titles[0]).to.eql('2018 Mazda MX-5 Miata Club');",
+                  "  pm.expect(titles[titles.length - 1]).to.eql('2022 Jeep Wrangler Unlimited Sahara');",
+                  "});",
+                  "pm.test('Sort option stays selected', () => pm.expect(html).to.include('<option value=\"price_asc\" selected>'));"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/cars?sort=price_asc" }
+        },
+        {
+          "name": "Sort = Price high to low",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const html = pm.response.text();",
+                  "const titles = [...html.matchAll(/car-card__title\"><a href=\"[^\"]+\">([^<]+)</g)].map(m => m[1]);",
+                  "const prices = [...html.matchAll(/car-card__price\">([^<]+)</g)].map(m => Number(m[1].replace(/[^0-9.]/g, '')));",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Prices descend', () => prices.forEach((p, i) => i && pm.expect(p).to.be.at.most(prices[i - 1])));",
+                  "pm.test('Most expensive first, cheapest last', () => {",
+                  "  pm.expect(titles[0]).to.eql('2022 Jeep Wrangler Unlimited Sahara');",
+                  "  pm.expect(titles[titles.length - 1]).to.eql('2018 Mazda MX-5 Miata Club');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/cars?sort=price_desc" }
+        },
+        {
+          "name": "Sort = Year newest first",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const html = pm.response.text();",
+                  "const titles = [...html.matchAll(/car-card__title\"><a href=\"[^\"]+\">([^<]+)</g)].map(m => m[1]);",
+                  "const years = titles.map(t => Number(t.slice(0, 4)));",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Years descend', () => years.forEach((y, i) => i && pm.expect(y).to.be.at.most(years[i - 1])));",
+                  "pm.test('2018 Mazda MX-5 is last', () => pm.expect(titles[titles.length - 1]).to.eql('2018 Mazda MX-5 Miata Club'));"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/cars?sort=year_desc" }
+        },
+        {
+          "name": "Sort = Mileage lowest first",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const html = pm.response.text();",
+                  "const titles = [...html.matchAll(/car-card__title\"><a href=\"[^\"]+\">([^<]+)</g)].map(m => m[1]);",
+                  "const miles = [...html.matchAll(/<li>([\\d,]+) mi<\\/li>/g)].map(m => Number(m[1].replace(/,/g, '')));",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Mileage ascends', () => {",
+                  "  pm.expect(miles.length).to.eql(10);",
+                  "  miles.forEach((m, i) => i && pm.expect(m).to.be.at.least(miles[i - 1]));",
+                  "});",
+                  "pm.test('Ioniq 5 first, F-150 last', () => {",
+                  "  pm.expect(titles[0]).to.eql('2023 Hyundai Ioniq 5 SEL');",
+                  "  pm.expect(titles[titles.length - 1]).to.eql('2020 Ford F-150 XLT SuperCrew');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/cars?sort=mileage_asc" }
+        }
+      ]
+    },
+    {
+      "name": "REG-08: Combined filters and Reset link",
+      "item": [
+        {
+          "name": "All filters combined",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const html = pm.response.text();",
+                  "const titles = [...html.matchAll(/car-card__title\"><a href=\"[^\"]+\">([^<]+)</g)].map(m => m[1]);",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Filters combine with AND logic', () => {",
+                  "  pm.expect(html).to.include('1 car found');",
+                  "  pm.expect(titles).to.eql(['2021 Toyota RAV4 Hybrid XLE']);",
+                  "});",
+                  "pm.test('Every filter value stays filled in', () => {",
+                  "  pm.expect(html).to.include('name=\"q\" value=\"Toyota\"');",
+                  "  pm.expect(html).to.include('<option value=\"1\" selected>');",
+                  "  pm.expect(html).to.include('<option value=\"suv\" selected>');",
+                  "  pm.expect(html).to.include('<option value=\"hybrid\" selected>');",
+                  "  pm.expect(html).to.match(/name=\"max_price\"[^>]*value=\"40000\"/);",
+                  "  pm.expect(html).to.match(/name=\"min_year\"[^>]*value=\"2020\"/);",
+                  "  pm.expect(html).to.include('<option value=\"price_asc\" selected>');",
+                  "});",
+                  "pm.test('Reset link points to unfiltered /cars', () => pm.expect(html).to.include('<a href=\"/cars\" class=\"car-filters__reset\">Reset</a>'));"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/cars?q=Toyota&location=1&body=suv&fuel=hybrid&max_price=40000&min_year=2020&sort=price_asc" }
+        },
+        {
+          "name": "Reset target shows all cars with default sort",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const html = pm.response.text();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('All 10 cars, default sort, empty search', () => {",
+                  "  pm.expect(html).to.match(/\\b10 cars found/);",
+                  "  pm.expect(html).to.include('<option value=\"newest\" selected>');",
+                  "  pm.expect(html).to.include('name=\"q\" value=\"\"');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/cars" }
+        },
+        {
+          "name": "Unknown filter values are ignored",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const html = pm.response.text();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('All 10 cars shown', () => pm.expect(html).to.match(/\\b10 cars found/));"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/cars?location=999&sort=bogus" }
+        }
+      ]
+    },
+    {
+      "name": "REG-09: Car card links open the correct listing and purchase flow",
+      "item": [
+        {
+          "name": "Card title, photo and View & buy links match",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const html = pm.response.text();",
+                  "const cards = html.split('<article class=\"car-card').slice(1).map(c => c.split('</article>')[0]).map(c => ({",
+                  "  title: (c.match(/car-card__title\"><a href=\"[^\"]+\">([^<]+)</) || [])[1],",
+                  "  price: (c.match(/car-card__price\">([^<]+)</) || [])[1],",
+                  "  location: (c.match(/car-card__location\">([^<]+)</) || [])[1],",
+                  "  links: [...new Set([...c.matchAll(/<a href=\"([^\"]+)\"/g)].map(m => m[1]))]",
+                  "}));",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Image, title and View & buy all link to the same car page', () => {",
+                  "  pm.expect(cards.length).to.eql(10);",
+                  "  cards.forEach(c => {",
+                  "    pm.expect(c.links, c.title).to.have.lengthOf(1);",
+                  "    pm.expect(c.links[0], c.title).to.match(/^\\/node\\/\\d+$/);",
+                  "  });",
+                  "});",
+                  "pm.collectionVariables.set('carUrl', cards[0].links[0]);",
+                  "pm.collectionVariables.set('carTitle', cards[0].title);",
+                  "pm.collectionVariables.set('carPrice', cards[0].price);",
+                  "pm.collectionVariables.set('carLocation', cards[0].location);",
+                  "pm.collectionVariables.set('allCars', JSON.stringify(cards.map(c => ({ title: c.title, url: c.links[0] }))));"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/cars" }
+        },
+        {
+          "name": "Car detail page matches its card",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const html = pm.response.text();",
+                  "const title = pm.collectionVariables.get('carTitle');",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Title, price and location match the card', () => {",
+                  "  pm.expect(html).to.match(new RegExp('<h1[^>]*>\\\\s*<span>' + title + '</span>'));",
+                  "  pm.expect(html).to.include(pm.collectionVariables.get('carPrice'));",
+                  "  pm.expect(html).to.include(pm.collectionVariables.get('carLocation'));",
+                  "});",
+                  "pm.test('Gallery has 2 photos', () => {",
+                  "  pm.expect(html).to.include('data-car-gallery-counter>1 / 2</span>');",
+                  "  pm.expect([...html.matchAll(/class=\"car-gallery__thumb( is-active)?\"/g)]).to.have.lengthOf(2);",
+                  "});",
+                  "pm.test('Purchase request form is present with required name and email', () => {",
+                  "  pm.expect(html).to.include('Interested in this car?');",
+                  "  pm.expect(html).to.include('id=\"car-inventory-purchase-form\"');",
+                  "  pm.expect(html).to.match(/name=\"name\"[^>]*required=\"required\"/);",
+                  "  pm.expect(html).to.match(/type=\"email\"[^>]*name=\"email\"[^>]*required=\"required\"/);",
+                  "});",
+                  "const img = (html.match(/<img src=\"([^\"]+)\"[^>]*class=\"car-gallery__main\"/) || [])[1];",
+                  "pm.test('Main gallery image URL found', () => pm.expect(img).to.be.a('string'));",
+                  "pm.collectionVariables.set('carImage', img);"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}{{carUrl}}" }
+        },
+        {
+          "name": "Main gallery image loads",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Image returns 200 with image content type', () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.headers.get('Content-Type')).to.match(/^image\\//);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": "{{carImage}}" }
+        },
+        {
+          "name": "Every car detail page loads for anonymous users",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const base = pm.variables.get('baseUrl');",
+                  "JSON.parse(pm.collectionVariables.get('allCars')).forEach(car => {",
+                  "  pm.sendRequest(base + car.url, (err, res) => {",
+                  "    pm.test(car.title + ' detail page loads with matching title', () => {",
+                  "      pm.expect(err).to.be.null;",
+                  "      pm.expect(res.code).to.eql(200);",
+                  "      pm.expect(res.text()).to.include('<span>' + car.title + '</span>');",
+                  "      pm.expect(res.text()).to.include('car-inventory-purchase-form');",
+                  "    });",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/cars" }
+        },
+        {
+          "name": "Unknown car returns 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/node/99999" }
+        }
+      ]
+    },
+    {
+      "name": "REG-10: Header navigation, login link, sticky header and accessibility",
+      "item": [
+        {
+          "name": "Header links, skip link, sticky toggle and form labels",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const html = pm.response.text();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Header has Home, Browse cars and Log in links', () => {",
+                  "  pm.expect(html).to.include('href=\"/\"');",
+                  "  pm.expect(html).to.include('href=\"/cars\"');",
+                  "  pm.expect(html).to.include('href=\"/user/login\"');",
+                  "});",
+                  "pm.test('Skip to main content link targets #main-content', () => {",
+                  "  pm.expect(html).to.match(/href=\"#main-content\"[^>]*>\\s*Skip to main content/);",
+                  "  pm.expect(html).to.include('id=\"main-content\"');",
+                  "});",
+                  "pm.test('Sticky header switch is accessible', () => {",
+                  "  pm.expect(html).to.match(/class=\"sticky-header-toggle\"[^>]*role=\"switch\"[^>]*aria-label=\"Sticky header\"/);",
+                  "});",
+                  "pm.test('Every filter field has a label', () => {",
+                  "  ['q', 'location', 'make', 'body', 'fuel', 'max-price', 'min-year', 'sort'].forEach(id => {",
+                  "    pm.expect(html, id).to.include('<label for=\"car-filter-' + id + '\"');",
+                  "    pm.expect(html, id).to.include('id=\"car-filter-' + id + '\"');",
+                  "  });",
+                  "});",
+                  "pm.test('Responsive viewport meta tag present', () => pm.expect(html).to.match(/<meta name=\"viewport\"[^>]*width=device-width/));"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/" }
+        },
+        {
+          "name": "Log in page loads",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const html = pm.response.text();",
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Drupal login form with username and password', () => {",
+                  "  pm.expect(html).to.include('id=\"user-login-form\"');",
+                  "  pm.expect(html).to.include('name=\"name\"');",
+                  "  pm.expect(html).to.include('name=\"pass\"');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/user/login" }
+        }
+      ]
+    }
+  ]
+}

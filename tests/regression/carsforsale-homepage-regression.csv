@@ -1,0 +1,122 @@
+Summary,Issue Type,Priority,Labels,Description
+"REG-01: Homepage loads with default listing of all cars",Task,Highest,regression,"URL: https://carsforsell.ddev.site/
+
+Preconditions: Site is running; 10 published car listings exist.
+
+Steps:
+1. Open https://carsforsell.ddev.site/ as an anonymous user.
+
+Expected result:
+- Page title is 'Cars for sale | Cars for Sale' and H1 'Cars for sale' is shown.
+- Result count shows '10 cars found'.
+- 10 car cards are shown, sorted by 'Newest listings' (default).
+- Each card shows title, price, location, year, mileage, fuel type, transmission, a '2 photos' link and a 'View & buy' link."
+"REG-02: Keyword search by make/model returns matching cars",Task,High,regression,"URL: https://carsforsell.ddev.site/
+
+Steps:
+1. Type 'Toyota' into the Search box (placeholder 'Make, model or keyword').
+2. Click Search.
+3. Repeat with 'Miata' and with a keyword that matches nothing (e.g. 'Lamborghini').
+
+Expected result:
+- 'Toyota' returns only the 2021 Toyota RAV4 Hybrid XLE and 2022 Toyota Camry SE; count shows '2 cars found'.
+- 'Miata' returns only the 2018 Mazda MX-5 Miata Club.
+- A keyword with no match shows 0 results and a friendly empty-results message, with no errors."
+"REG-03: Filter by Location",Task,High,regression,"URL: https://carsforsell.ddev.site/
+
+Steps:
+1. Select Location = 'Downtown Showroom' and click Search.
+2. Repeat for 'Northside Lot' and 'Airport Road Center'.
+
+Expected result:
+- Downtown Showroom: Subaru Outback, Toyota RAV4, Ford F-150, Toyota Camry (4 cars).
+- Northside Lot: Mazda MX-5, BMW 330i, Honda CR-V (3 cars).
+- Airport Road Center: Hyundai Ioniq 5, Jeep Wrangler, Tesla Model 3 (3 cars).
+- Every card shown displays the selected location; result count matches the number of cards."
+"REG-04: Filter by Make",Task,High,regression,"URL: https://carsforsell.ddev.site/
+
+Steps:
+1. Open the Make dropdown and verify options: Any make, BMW, Ford, Honda, Hyundai, Jeep, Mazda, Subaru, Tesla, Toyota.
+2. Select 'Tesla' and click Search.
+3. Select 'Toyota' and click Search.
+
+Expected result:
+- Tesla shows only the 2023 Tesla Model 3 Long Range (1 car).
+- Toyota shows only the RAV4 Hybrid XLE and Camry SE (2 cars).
+- The selected Make value is kept in the dropdown after the page reloads."
+"REG-05: Filter by Body type and Fuel",Task,High,regression,"URL: https://carsforsell.ddev.site/
+
+Steps:
+1. Select Fuel = 'Electric' and click Search.
+2. Reset, select Fuel = 'Hybrid' and click Search.
+3. Reset, select Body type = 'Truck' and click Search.
+4. Select Fuel = 'Diesel' and click Search.
+
+Expected result:
+- Electric: Hyundai Ioniq 5 SEL and Tesla Model 3 Long Range only.
+- Hybrid: Toyota RAV4 Hybrid XLE only.
+- Truck: Ford F-150 XLT SuperCrew only (assuming body type is set correctly on that listing).
+- Diesel: 0 results with an empty-results message and no errors."
+"REG-06: Filter by Max price and Min year, including invalid input",Task,High,regression,"URL: https://carsforsell.ddev.site/
+
+Steps:
+1. Enter Max price = 25000 and click Search.
+2. Reset, enter Min year = 2022 and click Search.
+3. Enter Max price = 30000 and Min year = 2021 together and click Search.
+4. Try negative and non-numeric values in both fields.
+
+Expected result:
+- Max price 25000: Subaru Outback ($23,700), Mazda MX-5 ($21,900), Toyota Camry ($24,995).
+- Min year 2022: Hyundai Ioniq 5, Jeep Wrangler, Tesla Model 3, Toyota Camry.
+- Combined filter: Honda CR-V EX ($27,450, 2021) and Toyota Camry SE ($24,995, 2022).
+- Invalid values are rejected or ignored without a server error (no white screen, no PHP error)."
+"REG-07: Sort by options order results correctly",Task,High,regression,"URL: https://carsforsell.ddev.site/
+
+Steps:
+1. Select each Sort by option and click Search: Newest listings, Price: low to high, Price: high to low, Year: newest first, Mileage: lowest first.
+
+Expected result:
+- Price low to high: first is Mazda MX-5 ($21,900), last is Jeep Wrangler ($39,500).
+- Price high to low: the reverse of the above.
+- Year newest first: 2023 cars first, 2018 Mazda MX-5 last.
+- Mileage lowest first: Hyundai Ioniq 5 (9,800 mi) first, Ford F-150 (48,700 mi) last.
+- The chosen sort option stays selected and works together with any active filters."
+"REG-08: Combined filters and Reset link",Task,Medium,regression,"URL: https://carsforsell.ddev.site/
+
+Steps:
+1. Enter a keyword, pick a Location, Make, Body type, Fuel, Max price, Min year and a Sort option, then click Search.
+2. Check the URL query string, then reload the page.
+3. Click Reset.
+
+Expected result:
+- Results match all active filters at the same time (AND logic).
+- Filter values are in the URL and are kept after reload, so the link can be shared.
+- Reset clears all filters, restores the 'Newest listings' sort and shows all 10 cars."
+"REG-09: Car card links open the correct listing and purchase flow",Task,Highest,regression,"URL: https://carsforsell.ddev.site/
+
+Steps:
+1. For one car (e.g. 2020 Subaru Outback Premium), click the car title.
+2. Go back and click '2 photos'.
+3. Go back and click 'View & buy'.
+4. Repeat a quick check on at least two other cards.
+
+Expected result:
+- Title link opens the detail page for that exact car (same title, price, location, specs as the card).
+- '2 photos' opens the photo gallery for that car with 2 images loaded (no broken images).
+- 'View & buy' opens the detail/purchase page for that car with a visible buy/enquiry action.
+- No 404 or access-denied errors for anonymous users."
+"REG-10: Header navigation, login link, sticky header and accessibility",Task,Medium,regression,"URL: https://carsforsell.ddev.site/
+
+Steps:
+1. Click the site name 'Cars for Sale', then 'Browse cars', then 'Home'.
+2. Click 'Log in'.
+3. Turn the 'Sticky header' switch on and scroll down, then turn it off and scroll again.
+4. Press Tab from the top of the page.
+5. Repeat steps 1 and 3 at mobile width (375px).
+
+Expected result:
+- Site name, Browse cars and Home all lead to the car listing page without errors.
+- Log in opens the Drupal /user/login form.
+- With sticky header on, the header stays visible while scrolling; with it off, it scrolls away.
+- The first Tab press shows a working 'Skip to main content' link; all filter fields have labels and can be reached by keyboard.
+- The layout works on mobile with no horizontal scrolling, and filters and cards are usable."
